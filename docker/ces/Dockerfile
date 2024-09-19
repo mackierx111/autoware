@@ -1,0 +1,26 @@
+FROM ghcr.io/autowarefoundation/autoware:universe-devel AS simulator
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# COPY --from=ghcr.io/tier4/scenario_simulator_v2:humble-4.2.8 /home/ubuntu/Desktop/scenario_simulator_ws/install /home/ubuntu/Desktop/scenario_simulator_ws/install
+# COPY --from=ghcr.io/tier4/scenario_simulator_v2:humble-4.2.8 /home/ubuntu/Desktop/scenario_simulator_ws/src /home/ubuntu/Desktop/scenario_simulator_ws/src
+# COPY --from=ghcr.io/tier4/scenario_simulator_v2:humble-4.2.8 /home/ubuntu/Desktop/scenario_simulator_ws/build /home/ubuntu/Desktop/scenario_simulator_ws/build
+COPY --from=ghcr.io/tier4/scenario_simulator_v2:humble-4.2.8 /home/ubuntu/Desktop/scenario_simulator_ws /home/ubuntu/Desktop/scenario_simulator_ws
+
+WORKDIR /home/ubuntu/Desktop/scenario_simulator_ws
+# Install rosdep dependencies of scenario simulator
+RUN cd /home/ubuntu/Desktop/scenario_simulator_ws && sudo apt-get update && rosdep update && rosdep install -y -r -i --from-paths src --ignore-src --rosdistro humble \
+    && rm -rf /var/lib/apt/lists/* && apt-get clean && apt-get autoremove -y \
+    && find / -name "*.o" -type f -delete \
+    && find / -name "*.h" -type f -delete \
+    && find / -name "*.hpp" -type f -delete 
+
+# Copy simulation files
+COPY etc/simulation/ /autoware/scenario-sim/
+RUN chmod +x /autoware/scenario-sim/rviz/launch_rviz.sh
+
+# Create entrypoint
+COPY etc/ros_entrypoint_sim.sh /ros_entrypoint.sh
+RUN chmod +x /ros_entrypoint.sh
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["ros2 launch scenario_test_runner scenario_test_runner.launch.py architecture_type:=awf/universe record:=false scenario:=/autoware/scenario-sim/yield_maneuver_demo.yaml sensor_model:=sample_sensor_kit vehicle_model:=sample_vehicle map_path:=/autoware/scenario-sim/map/ global_timeout:=240 initialize_duration:=90 launch_autoware:=false launch_rviz:=false"]
